@@ -69,11 +69,11 @@ async def bot(request: Request):
         issue = repo.get_issue(number=payload['pull_request']['number'])
 
         # Process the PR with PRReview (you can define the PRReview class and handle review here)
-        pr_review = PRReview(repo)  # Assuming PRReview takes the payload to process it
+        pr_review = PRReview(repo, issue)  # Assuming PRReview takes the payload to process it
         await pr_review.handle_request(payload, event)
 
         # Create a comment with the random meme
-        issue.create_comment("Howdy! This is an automated comment from the bot.")
+        #issue.create_comment("Howdy! This is an automated comment from the bot.")
         return {"status": "PR opened, comment added successfully"}
 
     except requests.RequestException as e:
