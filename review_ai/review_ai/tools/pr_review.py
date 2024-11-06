@@ -84,6 +84,7 @@ class PRReview:
         # Post comments for added lines
         for line_number, line in lines_added:
             feedback = generate_feedback(line)
+            logger.info(f"Feedback for line {line_number}: {feedback}")
             await self.post_comment_on_github(file_patch.filename, line_number, feedback, pull_request)
 
         # Post comments for removed lines
@@ -124,7 +125,7 @@ class PRReview:
             logger.info(f"PR head commit hash: {pr.head.sha}")
             commit = pr.get_commits().reversed[0]  # Get the latest commit
             # Attempt to post a review comment
-            pr.create_review(commit=commit, comments=comment)
+            pr.create_issue_comment(comment)
             
             logger.info(f"Comment posted successfully for {file_path} at line {line_number}")
         
