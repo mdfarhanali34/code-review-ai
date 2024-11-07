@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 import logging
 from itertools import islice
 from data.diff import FilePatchInfo, EDIT_TYPE
@@ -22,18 +22,12 @@ class PRReview:
         pull_request = body.get("pull_request")
         api_url = "your_api_url_here"
         diff_file = await self.get_diff_file(pull_request, api_url)
-        
-        # Store all comments here and post them at the end
-        all_comments = []
 
+        # Process each file patch and post comments line by line
         for file_patch in diff_file:
-            # Accumulate comments for each file patch
             file_comments = await self.process_file_patch(file_patch)
-            all_comments.extend(file_comments)
-
-        # Post all comments as a single message to GitHub
-        aggregated_comment = "\n".join(all_comments)
-        await self.post_comment_on_github(aggregated_comment, pull_request)
+            for line_number, comment in file_comments:
+                await self.post_comment_on_github(comment, file_patch.filename, line_number, pull_request)
 
     async def get_diff_file(self, pull_request: Dict[str, Any], api_url: str):
         number = pull_request.get("number")
@@ -49,14 +43,13 @@ class PRReview:
             contents_new = self.repo.get_contents(path, ref=head_sha)
             content_new = contents_new.decoded_content.decode()
 
+            edit_type = EDIT_TYPE.MODIFIED
             if file.status == 'added':
                 edit_type = EDIT_TYPE.ADDED
             elif file.status == 'removed':
                 edit_type = EDIT_TYPE.DELETED
             elif file.status == 'renamed':
                 edit_type = EDIT_TYPE.RENAMED
-            elif file.status == 'modified':
-                edit_type = EDIT_TYPE.MODIFIED
 
             patch_lines = patch.splitlines(keepends=True)
             num_plus_lines = len([line for line in patch_lines if line.startswith('+')])
@@ -66,25 +59,24 @@ class PRReview:
                                                             num_plus_lines=num_plus_lines,
                                                             num_minus_lines=num_minus_lines)
             diff_files.append(file_patch_canonical_structure)
-           
+
         return diff_files
 
-    async def process_file_patch(self, file_patch: FilePatchInfo):
+    async def process_file_patch(self, file_patch: FilePatchInfo) -> List[tuple]:
         """
         Processes the file's patch, generating feedback only where necessary.
+        Returns a list of tuples containing the line number and feedback comment.
         """
         patch = file_patch.patch
         lines_added, _ = self.parse_patch(patch)
         comments = []
 
-        # Only generate feedback for lines needing it
+        # Generate feedback only for lines needing it
         for line_number, line in lines_added:
-            value = needs_feedback(line)
-            logger.info(f"Line {line_number} needs feedback: {value}")
-            if value:  # Ask LLM if feedback is required
+            if needs_feedback(line):  # Check if feedback is required
                 feedback = generate_feedback(line)
                 if feedback:
-                    comments.append(f"- **Line {line_number + 1}**: {feedback}")
+                    comments.append((line_number + 1, f"- **Line {line_number + 1}** in `{file_patch.filename}`: {feedback}"))
 
         return comments
 
@@ -107,28 +99,27 @@ class PRReview:
                 line_number_removed += 1
         return added_lines, removed_lines
 
-    async def post_comment_on_github(self, comment: str, pull_request: Dict[str, Any]):
+    async def post_comment_on_github(self, comment: str, filename: str, line_number: int, pull_request: Dict[str, Any]):
         """
         Post a comment to GitHub for a specific line in a file, with error handling.
         """
         try:
-            # Retrieve PR number and PR object
             number = pull_request.get("number")
             pr = self.repo.get_pull(number)
-
+            
             # Create a general comment for context
             #self.issue.create_comment("Howdy! This is an automated comment from the bot.")
             logger.info(f"PR head commit hash: {pr.head.sha}")
             commit = pr.get_commits().reversed[0]  # Get the latest commit
             # Attempt to post a review comment
-            pr.create_issue_comment(comment)
-            #pr.create_review(commit=commit, comments=comment)
+            #pr.create_issue_comment(comment)
+            pr.create_review_comment(comment, commit, filename, line_number)
             
+
+            # Adjust comment structure with line-specific details if needed
+            #pr.create_issue_comment(f"**File**: `{filename}` | **Line**: {line_number}\n{comment}")
+            logger.info(f"Posted comment on PR #{number} for file {filename} at line {line_number}")
         
         except Exception as e:
-            # Capture and log the error details
-            
-            logger.error(f"Error: {str(e)}")
-            
-            # Optionally, re-raise the error or handle it further if needed
+            logger.error(f"Error posting comment on line {line_number} of {filename}: {str(e)}")
             raise

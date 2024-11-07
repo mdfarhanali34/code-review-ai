@@ -19,7 +19,7 @@ def needs_feedback(line: str) -> bool:
         openai.api_key = api_key
 
         # Construct the prompt for feedback necessity check
-        prompt = f"Does this line of code need improvement or feedback? Answer with 'Yes' or 'No': '{line}'"
+        prompt = f"This is a python file is there syntax error here? Answer with 'Yes' or 'No': '{line}'"
         completion = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
