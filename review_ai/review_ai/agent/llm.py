@@ -19,17 +19,22 @@ def needs_feedback(line: str) -> bool:
         openai.api_key = api_key
 
         # Construct the prompt for feedback necessity check
-        prompt = f"This is a python file is there syntax error here? Answer with 'Yes' or 'No': '{line}'"
+        prompt = (
+            f"This is a line of Python code: '{line}'. "
+            "Does it contain a critical error, bug, or functional issue that would impact the code’s functionality or security? "
+            "Respond with 'Yes' if it needs review for any critical issues or 'No' if it is fine as it is."
+        )
         completion = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a code review assistant. For each line of code, answer only 'Yes' or 'No' to indicate if it needs feedback."
+                    "content": "You are a code review assistant who evaluates if each line needs feedback. "
+                               "Respond only with 'Yes' or 'No' based on the presence of critical issues."
                 },
                 {
                     "role": "user",
-                    "content": line
+                    "content": prompt
                 }
             ],
             max_tokens=3,
