@@ -3,6 +3,46 @@ import openai
 from dotenv import load_dotenv
 import os
 
+
+def needs_feedback(line: str) -> bool:
+    """
+    Asks the LLM if a line of code needs feedback.
+    
+    Args:
+    line (str): The line of code to evaluate.
+    
+    Returns:
+    bool: True if the LLM suggests feedback is needed, False otherwise.
+    """
+    try:
+        api_key = os.getenv("OPENAI_API_KEY")
+        openai.api_key = api_key
+
+        # Construct the prompt for feedback necessity check
+        prompt = f"Does this line of code need improvement or feedback? Answer with 'Yes' or 'No': '{line}'"
+        completion = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a code review assistant. For each line of code, answer only 'Yes' or 'No' to indicate if it needs feedback."
+                },
+                {
+                    "role": "user",
+                    "content": line
+                }
+            ],
+            max_tokens=3,
+            temperature=0.0
+        )
+
+        response = completion.choices[0].message.content.strip().lower()
+        return response == "yes"
+    except Exception as e:
+        # Log or handle the exception as appropriate
+        print(f"Error in needs_feedback: {e}")
+        return False
+
 # Assuming you are using OpenAI's GPT model to generate feedback
 def generate_feedback(line: str) -> str:
     """
@@ -24,20 +64,25 @@ def generate_feedback(line: str) -> str:
 
 
         # Construct the prompt for code review
-        prompt = f"Provide feedback for this line of code: '{line}'. Please include suggestions for improvement if applicable."
+        prompt = (
+            f"Identify any critical error or bug in this line of code: '{line}'. "
+            "Only provide feedback for significant issues that could impact functionality or security. "
+            "Do not include minor improvements or style suggestions."
+        )
         completion = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {
                     "role": "system",
                     "content": (
-                        "You are a highly knowledgeable software engineer reviewing pull requests. "
-                        "Responses should be concise, accurate, and professional, focusing on key details under 300 tokens."
+                        "You are a senior software engineer providing code review. "
+                        "Your feedback should only mention critical issues, errors, or bugs. "
+                        "Avoid commenting on minor improvements or style changes."
                     )
                 },
                 {
                     "role": "user",
-                    "content": line 
+                    "content": prompt
                 }
             ],
             temperature=0.7,
